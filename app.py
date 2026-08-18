@@ -30,14 +30,9 @@ MODEL_FOLDER = "model"
 
 RESULTS_PATH = "model_comparison_results.csv"
 
-PREPROCESSOR_PATH = os.path.join(
-    MODEL_FOLDER,
-    "preprocessor.pkl"
-)
-
 
 # ============================================================
-# 3. FEATURES
+# 3. FEATURES REQUIRED BY THE TRAINED MODEL
 # ============================================================
 
 FEATURE_COLUMNS = [
@@ -52,6 +47,8 @@ FEATURE_COLUMNS = [
     "avg_sleep_hours",
     "daytime_sleep_minutes",
     "sleep_midpoint_minutes",
+    "sleep_midpoint_clock",
+    "sleep_bracket",
     "bedtime_variability",
     "nights_tracked_fraction",
     "prior_gpa",
@@ -90,13 +87,14 @@ if not os.path.exists(DATA_PATH):
 
 data = pd.read_csv(DATA_PATH)
 
+
 st.sidebar.success(
     "Dataset loaded successfully"
 )
 
 
 # ============================================================
-# 6. CHECK REQUIRED COLUMNS
+# 6. CHECK DATASET COLUMNS
 # ============================================================
 
 missing_columns = [
@@ -105,11 +103,12 @@ missing_columns = [
     if column not in data.columns
 ]
 
+
 if missing_columns:
 
     st.error(
-        "The dataset is missing the following required "
-        f"columns: {missing_columns}"
+        "The test dataset is missing these required columns: "
+        f"{missing_columns}"
     )
 
     st.stop()
@@ -134,8 +133,11 @@ comparison = pd.read_csv(
 
 
 # ============================================================
-# 8. REQUIRED METRICS
+# 8. MODEL METRICS
 # ============================================================
+
+# Your CSV uses:
+# ML Model Name, Accuracy, AUC, Precision, Recall, F1, MCC
 
 metric_columns = [
     "Accuracy",
@@ -162,15 +164,15 @@ missing_result_columns = [
 if missing_result_columns:
 
     st.error(
-        "The model comparison file is missing these "
-        f"columns: {missing_result_columns}"
+        "The model comparison file is missing these columns: "
+        f"{missing_result_columns}"
     )
 
     st.stop()
 
 
 # ============================================================
-# 9. DETERMINE BEST MODEL
+# 9. FIND BEST MODEL
 # ============================================================
 
 comparison["Overall Mean"] = comparison[
@@ -198,30 +200,7 @@ if best_model_name not in MODEL_FILES:
 
 
 # ============================================================
-# 10. LOAD PREPROCESSOR
-# ============================================================
-
-preprocessor = None
-
-
-if os.path.exists(PREPROCESSOR_PATH):
-
-    try:
-
-        preprocessor = joblib.load(
-            PREPROCESSOR_PATH
-        )
-
-    except Exception as error:
-
-        st.warning(
-            "Preprocessor could not be loaded. "
-            f"Details: {error}"
-        )
-
-
-# ============================================================
-# 11. LOAD BEST MODEL
+# 10. LOAD BEST MODEL
 # ============================================================
 
 MODEL_PATH = os.path.join(
@@ -248,30 +227,33 @@ try:
 except Exception as error:
 
     st.error(
-        f"Unable to load the trained model. "
-        f"Details: {error}"
+        "Unable to load the trained model."
+    )
+
+    st.exception(
+        error
     )
 
     st.stop()
 
 
 # ============================================================
-# 12. APPLICATION HEADER
+# 11. APPLICATION HEADER
 # ============================================================
 
 st.title(
     "😴 College Sleep Prediction"
 )
 
+
 st.markdown(
     """
     ### Predicting Under-6-Hour Sleep
 
-    This application uses a machine learning
-    classification model to predict whether a college
-    student belongs to the **under-6-hours sleep category**
-    based on academic, demographic, workload, and sleep
-    related information.
+    This application uses a machine learning classification
+    model to predict whether a college student belongs to the
+    **under-6-hours sleep category** based on academic,
+    demographic, workload, and sleep-related information.
     """
 )
 
@@ -280,7 +262,7 @@ st.divider()
 
 
 # ============================================================
-# 13. SIDEBAR - MODEL INFORMATION
+# 12. SIDEBAR MODEL INFORMATION
 # ============================================================
 
 st.sidebar.title(
@@ -314,7 +296,7 @@ st.sidebar.write(
 
 
 # ============================================================
-# 14. MODEL PERFORMANCE
+# 13. MODEL PERFORMANCE
 # ============================================================
 
 st.sidebar.subheader(
@@ -332,7 +314,7 @@ for metric in metric_columns:
 
 
 # ============================================================
-# 15. STUDENT AND ACADEMIC INFORMATION
+# 14. STUDENT AND ACADEMIC INFORMATION
 # ============================================================
 
 st.header(
@@ -372,6 +354,7 @@ with col2:
         .tolist()
     )
 
+
     university = st.selectbox(
         "University",
         university_values
@@ -391,6 +374,7 @@ with col3:
         .unique()
         .tolist()
     )
+
 
     semester = st.selectbox(
         "Semester",
@@ -412,6 +396,7 @@ with col4:
         .tolist()
     )
 
+
     cohort_code = st.selectbox(
         "Cohort Code",
         cohort_values
@@ -432,6 +417,7 @@ with col1:
         .tolist()
     )
 
+
     gender = st.selectbox(
         "Gender",
         gender_values
@@ -444,14 +430,17 @@ with col1:
 
 with col2:
 
+    first_generation_values = sorted(
+        data["first_generation"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+
     first_generation = st.selectbox(
         "First Generation",
-        sorted(
-            data["first_generation"]
-            .dropna()
-            .unique()
-            .tolist()
-        )
+        first_generation_values
     )
 
 
@@ -461,14 +450,17 @@ with col2:
 
 with col3:
 
+    underrepresented_values = sorted(
+        data["underrepresented"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+
     underrepresented = st.selectbox(
         "Underrepresented",
-        sorted(
-            data["underrepresented"]
-            .dropna()
-            .unique()
-            .tolist()
-        )
+        underrepresented_values
     )
 
 
@@ -494,7 +486,7 @@ with col4:
 
 
 # ============================================================
-# 16. SLEEP INFORMATION
+# 15. SLEEP INFORMATION
 # ============================================================
 
 st.header(
@@ -589,14 +581,60 @@ with col4:
     )
 
 
+# ============================================================
+# 16. ADDITIONAL SLEEP FEATURES
+# ============================================================
+
 col1, col2, col3, col4 = st.columns(4)
+
+
+# ------------------------------------------------------------
+# Sleep Midpoint Clock
+# ------------------------------------------------------------
+
+with col1:
+
+    sleep_midpoint_clock_values = sorted(
+        data["sleep_midpoint_clock"]
+        .dropna()
+        .astype(str)
+        .unique()
+        .tolist()
+    )
+
+
+    sleep_midpoint_clock = st.selectbox(
+        "Sleep Midpoint Clock",
+        sleep_midpoint_clock_values
+    )
+
+
+# ------------------------------------------------------------
+# Sleep Bracket
+# ------------------------------------------------------------
+
+with col2:
+
+    sleep_bracket_values = sorted(
+        data["sleep_bracket"]
+        .dropna()
+        .astype(str)
+        .unique()
+        .tolist()
+    )
+
+
+    sleep_bracket = st.selectbox(
+        "Sleep Bracket",
+        sleep_bracket_values
+    )
 
 
 # ------------------------------------------------------------
 # Bedtime Variability
 # ------------------------------------------------------------
 
-with col1:
+with col3:
 
     bedtime_variability = st.number_input(
         "Bedtime Variability",
@@ -617,7 +655,7 @@ with col1:
 # Nights Tracked Fraction
 # ------------------------------------------------------------
 
-with col2:
+with col4:
 
     nights_tracked_fraction = st.number_input(
         "Nights Tracked Fraction",
@@ -634,11 +672,23 @@ with col2:
     )
 
 
+# ============================================================
+# 17. GPA INFORMATION
+# ============================================================
+
+st.header(
+    "Academic Performance"
+)
+
+
+col1, col2, col3, col4 = st.columns(4)
+
+
 # ------------------------------------------------------------
 # Prior GPA
 # ------------------------------------------------------------
 
-with col3:
+with col1:
 
     prior_gpa = st.number_input(
         "Prior GPA",
@@ -659,7 +709,7 @@ with col3:
 # Term GPA
 # ------------------------------------------------------------
 
-with col4:
+with col2:
 
     term_gpa = st.number_input(
         "Term GPA",
@@ -676,23 +726,11 @@ with col4:
     )
 
 
-# ============================================================
-# 17. ACADEMIC PERFORMANCE
-# ============================================================
-
-st.header(
-    "Academic Performance"
-)
-
-
-col1, col2, col3, col4 = st.columns(4)
-
-
 # ------------------------------------------------------------
 # GPA Change
 # ------------------------------------------------------------
 
-with col1:
+with col3:
 
     gpa_change = st.number_input(
         "GPA Change",
@@ -713,7 +751,7 @@ with col1:
 # Term Load Z
 # ------------------------------------------------------------
 
-with col2:
+with col4:
 
     term_load_z = st.number_input(
         "Term Load Z",
@@ -766,6 +804,14 @@ input_data = pd.DataFrame({
         sleep_midpoint_minutes
     ],
 
+    "sleep_midpoint_clock": [
+        sleep_midpoint_clock
+    ],
+
+    "sleep_bracket": [
+        sleep_bracket
+    ],
+
     "bedtime_variability": [
         bedtime_variability
     ],
@@ -796,7 +842,9 @@ input_data = pd.DataFrame({
 })
 
 
-# Ensure exact feature order
+# ============================================================
+# 19. ENSURE CORRECT FEATURE ORDER
+# ============================================================
 
 input_data = input_data[
     FEATURE_COLUMNS
@@ -804,7 +852,7 @@ input_data = input_data[
 
 
 # ============================================================
-# 19. DISPLAY INPUT DATA
+# 20. VIEW INPUT DATA
 # ============================================================
 
 with st.expander(
@@ -818,7 +866,7 @@ with st.expander(
 
 
 # ============================================================
-# 20. PREDICTION BUTTON
+# 21. PREDICTION BUTTON
 # ============================================================
 
 st.divider()
@@ -832,47 +880,24 @@ predict_button = st.button(
 
 
 # ============================================================
-# 21. PREDICTION
+# 22. GENERATE PREDICTION
 # ============================================================
 
 if predict_button:
 
     try:
 
-        # ----------------------------------------------------
-        # Apply preprocessing if available
-        # ----------------------------------------------------
-
-        if preprocessor is not None:
-
-            try:
-
-                processed_input = (
-                    preprocessor.transform(
-                        input_data
-                    )
-                )
-
-            except Exception:
-
-                processed_input = input_data
-
-        else:
-
-            processed_input = input_data
-
-
-        # ----------------------------------------------------
-        # Generate prediction
-        # ----------------------------------------------------
+        # IMPORTANT:
+        # The saved model already contains the preprocessing
+        # pipeline. Therefore, input_data is passed directly.
 
         prediction = model.predict(
-            processed_input
+            input_data
         )[0]
 
 
         # ----------------------------------------------------
-        # Generate probability
+        # Probabilities
         # ----------------------------------------------------
 
         if hasattr(
@@ -880,19 +905,20 @@ if predict_button:
             "predict_proba"
         ):
 
-            probabilities = (
-                model.predict_proba(
-                    processed_input
-                )[0]
-            )
+            probabilities = model.predict_proba(
+                input_data
+            )[0]
+
 
             probability_not_under_6 = (
                 probabilities[0] * 100
             )
 
+
             probability_under_6 = (
                 probabilities[1] * 100
             )
+
 
             confidence = (
                 probabilities[
@@ -902,23 +928,22 @@ if predict_button:
 
         else:
 
-            probability_not_under_6 = (
-                100.0
-                if prediction == 0
-                else 0.0
-            )
+            if int(prediction) == 1:
 
-            probability_under_6 = (
-                100.0
-                if prediction == 1
-                else 0.0
-            )
+                probability_not_under_6 = 0.0
+                probability_under_6 = 100.0
+
+            else:
+
+                probability_not_under_6 = 100.0
+                probability_under_6 = 0.0
+
 
             confidence = 100.0
 
 
         # ====================================================
-        # 22. DISPLAY RESULT
+        # 23. DISPLAY RESULT
         # ====================================================
 
         st.header(
@@ -932,6 +957,7 @@ if predict_button:
                 "⚠️ Prediction: Under 6 Hours of Sleep"
             )
 
+
             interpretation = (
                 "The model predicts that this student "
                 "is likely to belong to the under-6-hours "
@@ -944,6 +970,7 @@ if predict_button:
                 "✅ Prediction: Not Under 6 Hours of Sleep"
             )
 
+
             interpretation = (
                 "The model predicts that this student "
                 "is unlikely to belong to the under-6-hours "
@@ -952,7 +979,7 @@ if predict_button:
 
 
         # ====================================================
-        # 23. CONFIDENCE
+        # 24. CONFIDENCE
         # ====================================================
 
         st.subheader(
@@ -961,13 +988,13 @@ if predict_button:
 
 
         st.metric(
-            label="Model Confidence",
-            value=f"{confidence:.2f}%"
+            "Model Confidence",
+            f"{confidence:.2f}%"
         )
 
 
         # ====================================================
-        # 24. PROBABILITY BREAKDOWN
+        # 25. PROBABILITY BREAKDOWN
         # ====================================================
 
         st.subheader(
@@ -1018,7 +1045,7 @@ if predict_button:
 
 
         # ====================================================
-        # 25. INTERPRETATION
+        # 26. INTERPRETATION
         # ====================================================
 
         st.subheader(
@@ -1046,7 +1073,7 @@ if predict_button:
 
 
         # ====================================================
-        # 26. MODEL INFORMATION
+        # 27. MODEL INFORMATION
         # ====================================================
 
         st.caption(
@@ -1058,8 +1085,7 @@ if predict_button:
     except Exception as error:
 
         st.error(
-            "An error occurred while generating the "
-            "prediction."
+            "An error occurred while generating the prediction."
         )
 
         st.exception(
@@ -1068,7 +1094,7 @@ if predict_button:
 
 
 # ============================================================
-# 27. FOOTER
+# 28. FOOTER
 # ============================================================
 
 st.divider()
@@ -1077,4 +1103,3 @@ st.divider()
 st.caption(
     "College Sleep and GPA Classification Project"
 )
-
