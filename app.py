@@ -1,6 +1,6 @@
 # ============================================================
-# STEP 6 - STREAMLIT APPLICATION
-# College Sleep and GPA Prediction
+# COLLEGE SLEEP AND GPA PREDICTION
+# STREAMLIT APPLICATION
 # ============================================================
 
 import os
@@ -21,17 +21,25 @@ st.set_page_config(
 
 
 # ============================================================
-# 2. CONSTANTS
+# 2. FILE PATHS
 # ============================================================
 
-DATA_PATH = "college_sleep_and_gpa.csv"
+DATA_PATH = "test_data.csv"
 
 MODEL_FOLDER = "model"
 
-RESULTS_PATH = "results/final_model_comparison.csv"
+RESULTS_PATH = "model_comparison_results.csv"
+
+PREPROCESSOR_PATH = os.path.join(
+    MODEL_FOLDER,
+    "preprocessor.pkl"
+)
 
 
-# Exact features retained during Step 2
+# ============================================================
+# 3. FEATURES
+# ============================================================
+
 FEATURE_COLUMNS = [
     "study",
     "university",
@@ -54,47 +62,31 @@ FEATURE_COLUMNS = [
 ]
 
 
-# Categorical features from Step 2
-CATEGORICAL_FEATURES = [
-    "university",
-    "semester",
-    "cohort_code",
-    "gender"
-]
+# ============================================================
+# 4. MODEL FILES
+# ============================================================
 
-
-# Numerical features from Step 2
-NUMERICAL_FEATURES = [
-    "study",
-    "first_generation",
-    "underrepresented",
-    "avg_sleep_minutes",
-    "avg_sleep_hours",
-    "daytime_sleep_minutes",
-    "sleep_midpoint_minutes",
-    "bedtime_variability",
-    "nights_tracked_fraction",
-    "prior_gpa",
-    "term_gpa",
-    "gpa_change",
-    "term_units",
-    "term_load_z"
-]
+MODEL_FILES = {
+    "Logistic Regression": "logistic_regression.pkl",
+    "Decision Tree": "decision_tree.pkl",
+    "KNN": "knn.pkl",
+    "Naive Bayes": "naive_bayes.pkl",
+    "Random Forest": "random_forest.pkl"
+}
 
 
 # ============================================================
-# 3. LOAD DATASET
+# 5. LOAD DATASET
 # ============================================================
-
-DATA_PATH = "college_sleep_and_gpa.csv"
 
 if not os.path.exists(DATA_PATH):
 
     st.error(
-        f"Dataset not found at: {DATA_PATH}"
+        f"Dataset not found: {DATA_PATH}"
     )
 
     st.stop()
+
 
 data = pd.read_csv(DATA_PATH)
 
@@ -104,14 +96,33 @@ st.sidebar.success(
 
 
 # ============================================================
-# 4. LOAD BEST MODEL FROM STEP 5
+# 6. CHECK REQUIRED COLUMNS
+# ============================================================
+
+missing_columns = [
+    column
+    for column in FEATURE_COLUMNS
+    if column not in data.columns
+]
+
+if missing_columns:
+
+    st.error(
+        "The dataset is missing the following required "
+        f"columns: {missing_columns}"
+    )
+
+    st.stop()
+
+
+# ============================================================
+# 7. LOAD MODEL COMPARISON RESULTS
 # ============================================================
 
 if not os.path.exists(RESULTS_PATH):
 
     st.error(
-        "Step 5 results file not found: "
-        f"{RESULTS_PATH}"
+        f"Model comparison file not found: {RESULTS_PATH}"
     )
 
     st.stop()
@@ -122,19 +133,46 @@ comparison = pd.read_csv(
 )
 
 
-# Determine the best model based on the average
-# of the six required evaluation metrics
+# ============================================================
+# 8. REQUIRED METRICS
+# ============================================================
+
 metric_columns = [
     "Accuracy",
     "AUC",
     "Precision",
     "Recall",
-    "F1 Score",
+    "F1",
     "MCC"
 ]
 
 
-# Calculate overall mean if not already present
+required_result_columns = [
+    "ML Model Name"
+] + metric_columns
+
+
+missing_result_columns = [
+    column
+    for column in required_result_columns
+    if column not in comparison.columns
+]
+
+
+if missing_result_columns:
+
+    st.error(
+        "The model comparison file is missing these "
+        f"columns: {missing_result_columns}"
+    )
+
+    st.stop()
+
+
+# ============================================================
+# 9. DETERMINE BEST MODEL
+# ============================================================
+
 comparison["Overall Mean"] = comparison[
     metric_columns
 ].mean(axis=1)
@@ -145,37 +183,46 @@ best_model_row = comparison.loc[
 ]
 
 
-best_model_name = best_model_row["Model"]
-
-
-# Map model names to saved model files
-MODEL_FILES = {
-    "Logistic Regression":
-        "logistic_regression.pkl",
-
-    "Decision Tree":
-        "decision_tree.pkl",
-
-    "KNN":
-        "knn.pkl",
-
-    "Naive Bayes":
-        "naive_bayes.pkl",
-
-    "Random Forest":
-        "random_forest.pkl"
-}
+best_model_name = best_model_row[
+    "ML Model Name"
+]
 
 
 if best_model_name not in MODEL_FILES:
 
     st.error(
-        f"Saved model file is not configured for "
-        f"{best_model_name}."
+        f"Model '{best_model_name}' is not configured."
     )
 
     st.stop()
 
+
+# ============================================================
+# 10. LOAD PREPROCESSOR
+# ============================================================
+
+preprocessor = None
+
+
+if os.path.exists(PREPROCESSOR_PATH):
+
+    try:
+
+        preprocessor = joblib.load(
+            PREPROCESSOR_PATH
+        )
+
+    except Exception as error:
+
+        st.warning(
+            "Preprocessor could not be loaded. "
+            f"Details: {error}"
+        )
+
+
+# ============================================================
+# 11. LOAD BEST MODEL
+# ============================================================
 
 MODEL_PATH = os.path.join(
     MODEL_FOLDER,
@@ -192,23 +239,38 @@ if not os.path.exists(MODEL_PATH):
     st.stop()
 
 
-model = joblib.load(MODEL_PATH)
+try:
+
+    model = joblib.load(
+        MODEL_PATH
+    )
+
+except Exception as error:
+
+    st.error(
+        f"Unable to load the trained model. "
+        f"Details: {error}"
+    )
+
+    st.stop()
 
 
 # ============================================================
-# 5. APPLICATION HEADER
+# 12. APPLICATION HEADER
 # ============================================================
 
-st.title("😴 College Sleep Prediction")
+st.title(
+    "😴 College Sleep Prediction"
+)
 
 st.markdown(
     """
     ### Predicting Under-6-Hour Sleep
 
-    This application uses a machine learning classification
-    model to predict whether a college student belongs to
-    the **under-6-hours sleep category** based on the
-    student's academic, demographic, workload, and sleep
+    This application uses a machine learning
+    classification model to predict whether a college
+    student belongs to the **under-6-hours sleep category**
+    based on academic, demographic, workload, and sleep
     related information.
     """
 )
@@ -218,34 +280,47 @@ st.divider()
 
 
 # ============================================================
-# 6. SIDEBAR - MODEL INFORMATION
+# 13. SIDEBAR - MODEL INFORMATION
 # ============================================================
 
-st.sidebar.title("Model Information")
+st.sidebar.title(
+    "Model Information"
+)
+
 
 st.sidebar.write(
     f"**Selected Model:** {best_model_name}"
 )
 
+
 st.sidebar.write(
     "**Problem Type:** Binary Classification"
 )
+
 
 st.sidebar.write(
     "**Target:** under_6h_sleep"
 )
 
+
 st.sidebar.write(
     "**Class 0:** Not Under 6 Hours"
 )
+
 
 st.sidebar.write(
     "**Class 1:** Under 6 Hours"
 )
 
 
-# Display model performance
-st.sidebar.subheader("Model Performance")
+# ============================================================
+# 14. MODEL PERFORMANCE
+# ============================================================
+
+st.sidebar.subheader(
+    "Model Performance"
+)
+
 
 for metric in metric_columns:
 
@@ -257,10 +332,12 @@ for metric in metric_columns:
 
 
 # ============================================================
-# 7. STUDENT / ACADEMIC INFORMATION
+# 15. STUDENT AND ACADEMIC INFORMATION
 # ============================================================
 
-st.header("Student and Academic Information")
+st.header(
+    "Student and Academic Information"
+)
 
 
 col1, col2, col3, col4 = st.columns(4)
@@ -417,10 +494,12 @@ with col4:
 
 
 # ============================================================
-# 8. SLEEP INFORMATION
+# 16. SLEEP INFORMATION
 # ============================================================
 
-st.header("Sleep Information")
+st.header(
+    "Sleep Information"
+)
 
 
 col1, col2, col3, col4 = st.columns(4)
@@ -598,10 +677,12 @@ with col4:
 
 
 # ============================================================
-# 9. ACADEMIC PERFORMANCE INFORMATION
+# 17. ACADEMIC PERFORMANCE
 # ============================================================
 
-st.header("Academic Performance")
+st.header(
+    "Academic Performance"
+)
 
 
 col1, col2, col3, col4 = st.columns(4)
@@ -650,7 +731,7 @@ with col2:
 
 
 # ============================================================
-# 10. CREATE INPUT DATAFRAME
+# 18. CREATE INPUT DATAFRAME
 # ============================================================
 
 input_data = pd.DataFrame({
@@ -716,16 +797,19 @@ input_data = pd.DataFrame({
 
 
 # Ensure exact feature order
+
 input_data = input_data[
     FEATURE_COLUMNS
 ]
 
 
 # ============================================================
-# 11. DISPLAY INPUT SUMMARY
+# 19. DISPLAY INPUT DATA
 # ============================================================
 
-with st.expander("View Input Data"):
+with st.expander(
+    "View Input Data"
+):
 
     st.dataframe(
         input_data,
@@ -734,10 +818,11 @@ with st.expander("View Input Data"):
 
 
 # ============================================================
-# 12. PREDICTION BUTTON
+# 20. PREDICTION BUTTON
 # ============================================================
 
 st.divider()
+
 
 predict_button = st.button(
     "🔮 Predict Sleep Category",
@@ -746,175 +831,250 @@ predict_button = st.button(
 )
 
 
+# ============================================================
+# 21. PREDICTION
+# ============================================================
+
 if predict_button:
 
-    # --------------------------------------------------------
-    # Generate prediction
-    # --------------------------------------------------------
+    try:
 
-    prediction = model.predict(
-        input_data
-    )[0]
+        # ----------------------------------------------------
+        # Apply preprocessing if available
+        # ----------------------------------------------------
 
+        if preprocessor is not None:
 
-    # --------------------------------------------------------
-    # Generate probabilities
-    # --------------------------------------------------------
+            try:
 
-    probabilities = model.predict_proba(
-        input_data
-    )[0]
+                processed_input = (
+                    preprocessor.transform(
+                        input_data
+                    )
+                )
 
+            except Exception:
 
-    probability_not_under_6 = (
-        probabilities[0] * 100
-    )
+                processed_input = input_data
 
+        else:
 
-    probability_under_6 = (
-        probabilities[1] * 100
-    )
+            processed_input = input_data
 
 
-    confidence = (
-        probabilities[int(prediction)] * 100
-    )
+        # ----------------------------------------------------
+        # Generate prediction
+        # ----------------------------------------------------
+
+        prediction = model.predict(
+            processed_input
+        )[0]
 
 
-    # ========================================================
-    # 13. DISPLAY PREDICTION
-    # ========================================================
+        # ----------------------------------------------------
+        # Generate probability
+        # ----------------------------------------------------
 
-    st.header("Prediction Result")
+        if hasattr(
+            model,
+            "predict_proba"
+        ):
+
+            probabilities = (
+                model.predict_proba(
+                    processed_input
+                )[0]
+            )
+
+            probability_not_under_6 = (
+                probabilities[0] * 100
+            )
+
+            probability_under_6 = (
+                probabilities[1] * 100
+            )
+
+            confidence = (
+                probabilities[
+                    int(prediction)
+                ] * 100
+            )
+
+        else:
+
+            probability_not_under_6 = (
+                100.0
+                if prediction == 0
+                else 0.0
+            )
+
+            probability_under_6 = (
+                100.0
+                if prediction == 1
+                else 0.0
+            )
+
+            confidence = 100.0
 
 
-    if prediction == 1:
+        # ====================================================
+        # 22. DISPLAY RESULT
+        # ====================================================
+
+        st.header(
+            "Prediction Result"
+        )
+
+
+        if int(prediction) == 1:
+
+            st.error(
+                "⚠️ Prediction: Under 6 Hours of Sleep"
+            )
+
+            interpretation = (
+                "The model predicts that this student "
+                "is likely to belong to the under-6-hours "
+                "sleep category."
+            )
+
+        else:
+
+            st.success(
+                "✅ Prediction: Not Under 6 Hours of Sleep"
+            )
+
+            interpretation = (
+                "The model predicts that this student "
+                "is unlikely to belong to the under-6-hours "
+                "sleep category."
+            )
+
+
+        # ====================================================
+        # 23. CONFIDENCE
+        # ====================================================
+
+        st.subheader(
+            "Prediction Confidence"
+        )
+
+
+        st.metric(
+            label="Model Confidence",
+            value=f"{confidence:.2f}%"
+        )
+
+
+        # ====================================================
+        # 24. PROBABILITY BREAKDOWN
+        # ====================================================
+
+        st.subheader(
+            "Prediction Probability"
+        )
+
+
+        probability_col1, probability_col2 = (
+            st.columns(2)
+        )
+
+
+        with probability_col1:
+
+            st.metric(
+                "Not Under 6 Hours",
+                f"{probability_not_under_6:.2f}%"
+            )
+
+
+        with probability_col2:
+
+            st.metric(
+                "Under 6 Hours",
+                f"{probability_under_6:.2f}%"
+            )
+
+
+        probability_df = pd.DataFrame({
+
+            "Sleep Category": [
+                "Not Under 6 Hours",
+                "Under 6 Hours"
+            ],
+
+            "Probability (%)": [
+                probability_not_under_6,
+                probability_under_6
+            ]
+        })
+
+
+        st.bar_chart(
+            probability_df.set_index(
+                "Sleep Category"
+            )
+        )
+
+
+        # ====================================================
+        # 25. INTERPRETATION
+        # ====================================================
+
+        st.subheader(
+            "Interpretation"
+        )
+
+
+        if int(prediction) == 1:
+
+            st.warning(
+                interpretation
+                + " The predicted probability for this "
+                "category is "
+                + f"{probability_under_6:.2f}%."
+            )
+
+        else:
+
+            st.info(
+                interpretation
+                + " The predicted probability for this "
+                "category is "
+                + f"{probability_not_under_6:.2f}%."
+            )
+
+
+        # ====================================================
+        # 26. MODEL INFORMATION
+        # ====================================================
+
+        st.caption(
+            f"Prediction generated using the "
+            f"{best_model_name} model."
+        )
+
+
+    except Exception as error:
 
         st.error(
-            "⚠️ Prediction: Under 6 Hours of Sleep"
+            "An error occurred while generating the "
+            "prediction."
         )
 
-        interpretation = (
-            "The model predicts that this student "
-            "is likely to belong to the under-6-hours "
-            "sleep category."
+        st.exception(
+            error
         )
-
-    else:
-
-        st.success(
-            "✅ Prediction: Not Under 6 Hours of Sleep"
-        )
-
-        interpretation = (
-            "The model predicts that this student "
-            "is unlikely to belong to the under-6-hours "
-            "sleep category."
-        )
-
-
-    # ========================================================
-    # 14. CONFIDENCE
-    # ========================================================
-
-    st.subheader("Prediction Confidence")
-
-
-    st.metric(
-        label="Model Confidence",
-        value=f"{confidence:.2f}%"
-    )
-
-
-    # ========================================================
-    # 15. PROBABILITY BREAKDOWN
-    # ========================================================
-
-    st.subheader("Prediction Probability")
-
-
-    probability_col1, probability_col2 = st.columns(2)
-
-
-    with probability_col1:
-
-        st.metric(
-            "Not Under 6 Hours",
-            f"{probability_not_under_6:.2f}%"
-        )
-
-
-    with probability_col2:
-
-        st.metric(
-            "Under 6 Hours",
-            f"{probability_under_6:.2f}%"
-        )
-
-
-    probability_df = pd.DataFrame({
-
-        "Sleep Category": [
-            "Not Under 6 Hours",
-            "Under 6 Hours"
-        ],
-
-        "Probability (%)": [
-            probability_not_under_6,
-            probability_under_6
-        ]
-    })
-
-
-    st.bar_chart(
-        probability_df.set_index(
-            "Sleep Category"
-        )
-    )
-
-
-    # ========================================================
-    # 16. INTERPRETATION
-    # ========================================================
-
-    st.subheader("Interpretation")
-
-
-    if prediction == 1:
-
-        st.warning(
-            interpretation
-            + " The predicted probability for this "
-            "category is "
-            + f"{probability_under_6:.2f}%."
-        )
-
-    else:
-
-        st.info(
-            interpretation
-            + " The predicted probability for this "
-            "category is "
-            + f"{probability_not_under_6:.2f}%."
-        )
-
-
-    # ========================================================
-    # 17. MODEL INFORMATION
-    # ========================================================
-
-    st.caption(
-        f"Prediction generated using the "
-        f"{best_model_name} model."
-    )
 
 
 # ============================================================
-# 18. FOOTER
+# 27. FOOTER
 # ============================================================
 
 st.divider()
 
+
 st.caption(
     "College Sleep and GPA Classification Project"
 )
+
